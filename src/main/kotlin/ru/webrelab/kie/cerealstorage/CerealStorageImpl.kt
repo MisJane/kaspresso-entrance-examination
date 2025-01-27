@@ -1,5 +1,7 @@
 package ru.webrelab.kie.cerealstorage
 
+import kotlin.math.min
+
 class CerealStorageImpl(
     override val containerCapacity: Float,
     override val storageCapacity: Float
@@ -18,62 +20,57 @@ class CerealStorageImpl(
         }
     }
 
+    private val containers = mutableMapOf<Cereal, Float>()
+    private val maxContainers = (storageCapacity / containerCapacity).toInt()
     private val storage = mutableMapOf<Cereal, Float>()
 
     override fun addCereal(cereal: Cereal, amount: Float): Float {
-        require(amount > 0) { "Кол-во не может быть отрицательным" }
+        require(amount >= 0) { "Может быть только положительным" }
 
-        val currentAmount = storage.getOrDefault(cereal, 0f)
-        val availableSpace = getSpace(cereal)
+        val currentAmount = containers[cereal] ?: 0f
+        val availableSpace = containerCapacity - currentAmount
 
-        return if (availableSpace >= amount) {
-            storage[cereal] = currentAmount + amount
-            0f
+        return if (currentAmount > 0) {
+            val added = min(amount, availableSpace)
+            containers[cereal] = currentAmount + added
+            amount - added
         } else {
-            storage[cereal] = currentAmount + availableSpace
-            amount - availableSpace
+            if (containers.size >= maxContainers) {
+                throw IllegalStateException("Невозможно добавить новый контейнер,- хранилище занято")
+            }
+            val added = min(amount, containerCapacity)
+            containers[cereal] = added
+            amount - added
         }
     }
 
     override fun getCereal(cereal: Cereal, amount: Float): Float {
-        require(amount > 0) { "Кол-во не может быть отрицательным" }
+        require(amount >= 0) { "Может быть только положительным" }
 
-        val currentAmount = storage.getOrDefault(cereal, 0f)
-        return if (currentAmount >= amount) {
-            storage[cereal] = currentAmount - amount
-            amount
-        } else {
-            storage.remove(cereal)
-            currentAmount
-        }
+        val currentAmount = containers[cereal] ?: 0f
+        val taken = min(amount, currentAmount)
+        containers[cereal] = currentAmount - taken
+        return taken
     }
 
     override fun removeContainer(cereal: Cereal): Boolean {
-        val currentAmount = storage.getOrDefault(cereal, 0f)
-        return if (currentAmount == 0f) {
-            storage.remove(cereal)
-            true
+        return if ((containers[cereal] ?: 0f) == 0f) {
+            containers.remove(cereal) != null
         } else {
             false
         }
     }
 
     override fun getAmount(cereal: Cereal): Float {
-        return storage.getOrDefault(cereal, 0f)
+        return containers[cereal] ?: 0f
     }
 
     override fun getSpace(cereal: Cereal): Float {
-        val currentAmount = storage.getOrDefault(cereal, 0f)
-        return containerCapacity - currentAmount
+        return containerCapacity - getAmount(cereal)
     }
 
     override fun toString(): String {
-        return buildString {
-            append("Хранилище крупы: \n")
-            storage.forEach { (cereal, amount) ->
-                append("- ${cereal.name}: $amount/$containerCapacity\n")
-            }
-        }
+        return containers.entries.joinToString(", ") { "${it.key}=${it.value}" }
     }
 
 }
